@@ -1,93 +1,53 @@
-// App.jsx - PINGO 프론트엔드 (이 파일 전체를 복사해서 붙여넣으세요!)
+
+// App.jsx - PINGO 프론트엔드 (백엔드 연동 버전)
 
 import React, { useState, useEffect } from 'react';
 import { Camera, MapPin, ChevronRight, RefreshCw, Star, TrendingUp, Gift, Clock, Users } from 'lucide-react';
-
-// 샘플 메뉴 데이터
-const trendingMenus = [
-  { id: 1, name: '두바이 쫀득쿠키', emoji: '🍪', color: '#BC5F3F' },
-  { id: 2, name: '마라탕후루', emoji: '🍓', color: '#E85D75' },
-  { id: 3, name: '꾸덕 티라미수', emoji: '🍰', color: '#8B6F47' },
-];
-
-// 샘플 매장 데이터 (크라우드소싱 정보 포함)
-const sampleStores = [
-  { 
-    id: 1, 
-    name: '강남 디저트39', 
-    address: '서울 강남구', 
-    stock: 12, 
-    lat: 37.5, 
-    lng: 127.05, 
-    phone: '02-1234-5678',
-    lastReported: '5분 전',
-    reporterCount: 3,
-    confidence: 95,
-    reportedBy: '김민지님',
-    hasPhoto: true
-  },
-  { 
-    id: 2, 
-    name: '홍대 스위트팩토리', 
-    address: '서울 마포구', 
-    stock: 8, 
-    lat: 37.55, 
-    lng: 126.92, 
-    phone: '02-2345-6789',
-    lastReported: '12분 전',
-    reporterCount: 2,
-    confidence: 85,
-    reportedBy: '이준호님',
-    hasPhoto: false
-  },
-  { 
-    id: 3, 
-    name: '잠실 쿠키하우스', 
-    address: '서울 송파구', 
-    stock: 15, 
-    lat: 37.51, 
-    lng: 127.1, 
-    phone: '02-3456-7890',
-    lastReported: '2분 전',
-    reporterCount: 5,
-    confidence: 98,
-    reportedBy: '박서연님',
-    hasPhoto: true
-  },
-  { 
-    id: 4, 
-    name: '신촌 달콤베이커리', 
-    address: '서울 서대문구', 
-    stock: 5, 
-    lat: 37.56, 
-    lng: 126.94, 
-    phone: '02-4567-8901',
-    lastReported: '25분 전',
-    reporterCount: 1,
-    confidence: 70,
-    reportedBy: '최지우님',
-    hasPhoto: true
-  },
-];
+import { getMenus, getStoresForMenu, reportStock, getUserPoints } from './api/pingoAPI';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('menu'); // 'menu' | 'map' | 'report'
   const [selectedMenu, setSelectedMenu] = useState(null);
   const [selectedStore, setSelectedStore] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [userPoints, setUserPoints] = useState(150); // 사용자 포인트
+  const [userPoints, setUserPoints] = useState(0);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [menus, setMenus] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [userId, setUserId] = useState('66a0d436a536916f137a82b9'); // 임시 사용자 ID
 
-  // 재고 제보 폼
   const [reportForm, setReportForm] = useState({
     quantity: '',
-    hasPhoto: false,
+    photo: null,
     photoPreview: null
   });
 
-  const handleMenuSelect = (menu) => {
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+  
+  const fetchInitialData = async () => {
+    try {
+      const menuData = await getMenus();
+      setMenus(menuData);
+      const pointsData = await getUserPoints(userId);
+      setUserPoints(pointsData.points);
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+      alert("데이터를 불러오는 데 실패했습니다.");
+    }
+  };
+
+  const handleMenuSelect = async (menu) => {
     setSelectedMenu(menu);
     setCurrentScreen('map');
+    try {
+      const storeData = await getStoresForMenu(menu._id);
+      setStores(storeData);
+    } catch (error) {
+      console.error(`Error fetching stores for menu ${menu._id}:`, error);
+      alert("매장 정보를 불러오는 데 실패했습니다.");
+    }
   };
 
   const handleStoreClick = (store) => {
@@ -95,9 +55,17 @@ export default function App() {
   };
 
   const handleRefresh = async () => {
+    if (!selectedMenu) return;
     setIsRefreshing(true);
-    // 실제로는 API 호출
-    setTimeout(() => setIsRefreshing(false), 1500);
+    try {
+      const storeData = await getStoresForMenu(selectedMenu._id);
+      setStores(storeData);
+    } catch (error) {
+      console.error(`Error refreshing stores for menu ${selectedMenu._id}:`, error);
+      alert("매장 정보를 새로고침하는 데 실패했습니다.");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleBack = () => {
@@ -105,6 +73,7 @@ export default function App() {
     setShowReportModal(false);
     setCurrentScreen('menu');
     setSelectedMenu(null);
+    setStores([]);
   };
 
   const handleReportClick = (store) => {
@@ -119,7 +88,7 @@ export default function App() {
       reader.onloadend = () => {
         setReportForm({
           ...reportForm,
-          hasPhoto: true,
+          photo: file,
           photoPreview: reader.result
         });
       };
@@ -127,22 +96,37 @@ export default function App() {
     }
   };
 
-  const handleSubmitReport = () => {
-    // 실제로는 API 호출
-    const points = reportForm.hasPhoto ? 20 : 10;
-    setUserPoints(userPoints + points);
-    
-    alert(`✅ 재고 제보 완료!\n🎁 ${points} 포인트 적립되었습니다!`);
-    
-    setShowReportModal(false);
-    setReportForm({ quantity: '', hasPhoto: false, photoPreview: null });
+  const handleSubmitReport = async () => {
+    if (!reportForm.quantity) {
+      alert("재고 수량을 입력해주세요.");
+      return;
+    }
+
+    try {
+      const reportData = {
+        ...reportForm,
+        userId,
+        storeId: selectedStore.id,
+        menuId: selectedMenu._id,
+      };
+      
+      const result = await reportStock(reportData);
+      
+      setUserPoints(result.totalPoints);
+      alert(`✅ 재고 제보 완료!\n🎁 ${result.points} 포인트 적립되었습니다!`);
+      
+      setShowReportModal(false);
+      setReportForm({ quantity: '', photo: null, photoPreview: null });
+      handleRefresh(); // 제보 후 목록 새로고침
+    } catch (error) {
+      console.error("Error submitting report:", error);
+      alert(`재고 제보에 실패했습니다: ${error.message}`);
+    }
   };
 
-  // 메뉴 선택 화면
   if (currentScreen === 'menu') {
     return (
       <div className="h-screen bg-white flex flex-col">
-        {/* 헤더 */}
         <div className="px-6 pt-12 pb-6 border-b border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-3xl font-bold text-gray-900">PINGO</h1>
@@ -154,7 +138,6 @@ export default function App() {
           <p className="text-sm text-gray-500">실시간 재고 정보, 사용자가 만들어가요</p>
         </div>
 
-        {/* 포인트 안내 배너 */}
         <div className="mx-6 mt-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-4 border border-orange-100">
           <div className="flex items-start gap-3">
             <div className="bg-white rounded-full p-2">
@@ -171,13 +154,12 @@ export default function App() {
           </div>
         </div>
 
-        {/* 메뉴 리스트 */}
         <div className="flex-1 px-6 mt-6">
           <h2 className="text-lg font-semibold text-gray-700 mb-4">지금 핫한 메뉴</h2>
           <div className="space-y-3">
-            {trendingMenus.map((menu) => (
+            {menus.map((menu) => (
               <button
-                key={menu.id}
+                key={menu._id}
                 onClick={() => handleMenuSelect(menu)}
                 className="w-full bg-gray-50 hover:bg-gray-100 rounded-2xl p-5 flex items-center justify-between transition-all"
               >
@@ -197,7 +179,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 하단 통계 */}
         <div className="px-6 py-6 bg-gray-50 border-t border-gray-100">
           <div className="grid grid-cols-3 gap-4 text-center text-sm">
             <div>
@@ -218,10 +199,8 @@ export default function App() {
     );
   }
 
-  // 지도 화면
   return (
     <div className="h-screen bg-white flex flex-col">
-      {/* 헤더 */}
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-white z-10">
         <button onClick={handleBack} className="text-gray-600 hover:text-gray-900">
           ← 뒤로
@@ -242,7 +221,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* 지도 영역 */}
       <div className="flex-1 relative bg-gray-100">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200">
           <div className="absolute inset-0 opacity-10" style={{
@@ -251,8 +229,7 @@ export default function App() {
           }}></div>
         </div>
 
-        {/* 매장 핀들 */}
-        {sampleStores.map((store, index) => (
+        {stores.map((store, index) => (
           <button
             key={store.id}
             onClick={() => handleStoreClick(store)}
@@ -272,7 +249,6 @@ export default function App() {
               <div className="absolute -top-1 -right-1 bg-white rounded-full px-2 py-0.5 shadow-md border-2" style={{ borderColor: '#BC5F3F' }}>
                 <span className="text-xs font-bold" style={{ color: '#BC5F3F' }}>{store.stock}</span>
               </div>
-              {/* 신뢰도 배지 */}
               {store.confidence > 90 && (
                 <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2">
                   <div className="bg-green-500 rounded-full p-1">
@@ -285,7 +261,6 @@ export default function App() {
         ))}
       </div>
 
-      {/* 재고 제보 모달 */}
       {showReportModal && selectedStore && (
         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-end z-20">
           <div className="bg-white w-full rounded-t-3xl shadow-2xl p-6 max-h-[80vh] overflow-y-auto">
@@ -297,13 +272,11 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              {/* 매장 정보 */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <p className="font-semibold text-gray-900">{selectedStore.name}</p>
                 <p className="text-sm text-gray-500">{selectedStore.address}</p>
               </div>
 
-              {/* 재고 수량 입력 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   현재 재고 수량 *
@@ -317,7 +290,6 @@ export default function App() {
                 />
               </div>
 
-              {/* 사진 첨부 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   사진 첨부 (+10 포인트)
@@ -335,7 +307,7 @@ export default function App() {
                 >
                   <Camera size={20} className="text-gray-400" />
                   <span className="text-gray-600">
-                    {reportForm.hasPhoto ? '사진 선택됨 ✓' : '사진 선택하기'}
+                    {reportForm.photo ? '사진 선택됨 ✓' : '사진 선택하기'}
                   </span>
                 </label>
                 {reportForm.photoPreview && (
@@ -343,17 +315,15 @@ export default function App() {
                 )}
               </div>
 
-              {/* 예상 포인트 */}
               <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-700">예상 적립 포인트</span>
                   <span className="text-xl font-bold" style={{ color: '#BC5F3F' }}>
-                    +{reportForm.hasPhoto ? 20 : 10}P
+                    +{reportForm.photo ? 20 : 10}P
                   </span>
                 </div>
               </div>
 
-              {/* 제출 버튼 */}
               <button
                 onClick={handleSubmitReport}
                 disabled={!reportForm.quantity}
@@ -367,7 +337,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 매장 상세 정보 */}
       {selectedStore && !showReportModal && (
         <div className="bg-white rounded-t-3xl shadow-2xl p-6 border-t border-gray-200 z-10">
           <div className="flex items-start justify-between mb-4">
@@ -384,7 +353,6 @@ export default function App() {
           </div>
 
           <div className="space-y-3">
-            {/* 재고 정보 */}
             <div className="bg-gray-50 rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">현재 재고</span>
@@ -393,7 +361,6 @@ export default function App() {
                 </span>
               </div>
               
-              {/* 제보 정보 */}
               <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center gap-1 text-xs text-gray-500">
                   <Clock size={14} />
@@ -411,7 +378,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* 신뢰도 */}
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">신뢰도</span>
@@ -430,13 +396,11 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 최근 제보자 */}
               <p className="text-xs text-gray-500 mt-2">
                 최근 제보: {selectedStore.reportedBy}
               </p>
             </div>
 
-            {/* 액션 버튼 */}
             <div className="flex gap-2">
               <button 
                 onClick={() => handleReportClick(selectedStore)}
@@ -453,17 +417,16 @@ export default function App() {
         </div>
       )}
 
-      {/* 매장 리스트 (매장 선택 안됐을 때) */}
       {!selectedStore && !showReportModal && (
         <div className="bg-white rounded-t-3xl shadow-2xl p-6 max-h-80 overflow-y-auto border-t border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">재고 있는 매장 ({sampleStores.length})</h3>
+            <h3 className="font-semibold text-gray-900">재고 있는 매장 ({stores.length})</h3>
             <button className="text-sm" style={{ color: '#BC5F3F' }}>
               최신순 ▼
             </button>
           </div>
           <div className="space-y-2">
-            {sampleStores.map((store) => (
+            {stores.map((store) => (
               <button
                 key={store.id}
                 onClick={() => handleStoreClick(store)}
