@@ -1,5 +1,5 @@
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
 
 // Helper for GET requests
 const get = async (endpoint) => {
@@ -11,7 +11,7 @@ const get = async (endpoint) => {
   if (!result.success) {
     throw new Error(result.error || 'API call failed');
   }
-  return result.data;
+  return result.data ?? result;
 };
 
 // 1. 메뉴 조회
