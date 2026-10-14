@@ -1,10 +1,11 @@
 // server.js - PINGO 메인 백엔드 서버
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const multer = require('multer');
-const path = require('path');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import multer from 'multer';
+import path from 'node:path';
+import fs from 'node:fs';
+import 'dotenv/config';
 
 // 무료 재고 확인 시스템 임포트
 // const { HybridStockChecker } = require('./free-stock-checker');
@@ -105,6 +106,8 @@ const Store = mongoose.model('Store', StoreSchema);
 const CrawledData = mongoose.model('CrawledData', CrawledDataSchema);
 
 // ==================== 파일 업로드 설정 ====================
+
+fs.mkdirSync('uploads', { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -456,11 +459,6 @@ app.listen(PORT, () => {
 
 async function seedDatabase() {
   try {
-    await User.deleteMany({});
-    await Store.deleteMany({});
-    await Menu.deleteMany({});
-    await StockReport.deleteMany({});
-    
     const menuCount = await Menu.countDocuments();
     if (menuCount > 0) {
       console.log('✅ Database already seeded');
@@ -510,4 +508,7 @@ async function seedDatabase() {
   }
 }
 
-setTimeout(seedDatabase, 2000);
+// Seed only when explicitly requested, after the database is connected.
+if (process.env.SEED_DEMO_DATA === 'true') {
+  db.once('open', seedDatabase);
+}
